@@ -19,13 +19,16 @@ Choix par défaut : approbations dans un salon modo dédié, défini via /rr_set
 
 import os
 import json
+import time
+import shutil
 import asyncio
 import logging
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
+from keep_alive import keep_alive
 
 # ----------------------------------------------------------------------------- #
 #  Configuration
@@ -34,6 +37,10 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 TEST_GUILD_ID = os.getenv("TEST_GUILD_ID")  # optionnel : sync instantané sur un serveur de test
 DATA_FILE = os.getenv("DATA_FILE", "data.json")
+BACKUP_DIR = os.getenv("BACKUP_DIR", "backups")
+BACKUP_KEEP = int(os.getenv("BACKUP_KEEP", "14"))  # nb de copies conservées
+HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL")  # ex: https://hc-ping.com/xxxxx-uuid
+HEARTBEAT_MINUTES = int(os.getenv("HEARTBEAT_MINUTES", "10"))
 
 PROPOSE_EMOJI = "\u2795"  # ➕
 
@@ -101,15 +108,77 @@ class Store:
         return self.data["guilds"].get(str(guild_id))
 
     def ensure_guild(self, guild_id) -> dict:
-        """Renvoie la config du serveur, en la créant si besoin."""
         g = self.data["guilds"].setdefault(
             str(guild_id),
-            {"rr_channel_id": None, "mod_channel_id": None, "messages": [], "games": {}},
+            {
+                "rr_channel_id": None, 
+                "mod_channel_id": None, 
+                "messages": [], 
+                "games": {},
+                # Nouvelles clés
+                "logs_channel_id": None,
+                "anniv_channel_id": None,
+                "starboard_channel_id": None,
+                "auto_thread_channels": [],
+                "birthdays": {},
+                "starboard_msgs": []
+            },
         )
         return g
 
 
 store = Store(DATA_FILE)
+
+
+# ----------------------------------------------------------------------------- #
+#  Sauvegardes de data.json
+# ----------------------------------------------------------------------------- #
+def do_backup() -> str | None:
+    """Copie data.json dans backups/data-AAAAMMJJ-HHMMSS.json et purge les vieilles copies.
+    Renvoie le chemin de la copie, ou None si data.json n'existe pas encore."""
+    if not os.path.exists(DATA_FILE):
+        return None
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    dest = os.path.join(BACKUP_DIR, f"data-{time.strftime('%Y%m%d-%H%M%S')}.json")
+    shutil.copy2(DATA_FILE, dest)
+    copies = sorted(f for f in os.listdir(BACKUP_DIR)
+                    if f.startswith("data-") and f.endswith(".json"))
+    for old in copies[:-BACKUP_KEEP]:
+        try:
+            os.remove(os.path.join(BACKUP_DIR, old))
+        except OSError:
+            pass
+    return dest
+
+
+@tasks.loop(hours=24)
+async def auto_backup():
+    dest = do_backup()
+    if dest:
+        log.info("Sauvegarde automatique : %s", dest)
+
+
+@auto_backup.before_loop
+async def _wait_ready():
+    await bot.wait_until_ready()
+
+
+@tasks.loop(minutes=HEARTBEAT_MINUTES)
+async def heartbeat():
+    """Ping healthchecks.io. Si le bot tombe, healthchecks n'entend plus rien et alerte."""
+    if not HEALTHCHECK_URL:
+        return
+    import aiohttp  # fourni par discord.py, pas d'installation en plus
+    try:
+        async with aiohttp.ClientSession() as s:
+            await s.get(HEALTHCHECK_URL, timeout=aiohttp.ClientTimeout(total=10))
+    except Exception as exc:
+        log.warning("Heartbeat échoué (%s) — sans conséquence pour le bot.", exc)
+
+
+@heartbeat.before_loop
+async def _wait_ready_hb():
+    await bot.wait_until_ready()
 
 
 # ----------------------------------------------------------------------------- #
@@ -471,6 +540,11 @@ bot = RoleBot()
 @bot.event
 async def on_ready():
     log.info("Connecté en tant que %s (id=%s)", bot.user, bot.user.id)
+    if not auto_backup.is_running():
+        auto_backup.start()  # 1re copie immédiate, puis toutes les 24 h
+    if HEALTHCHECK_URL and not heartbeat.is_running():
+        heartbeat.start()
+        log.info("Heartbeat healthchecks.io actif (toutes les %s min).", HEARTBEAT_MINUTES)
 
 
 @bot.event
@@ -478,11 +552,37 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     if payload.guild_id is None or payload.user_id == bot.user.id:
         return
     gdata = store.guild(payload.guild_id)
-    if not gdata or payload.message_id not in gdata.get("messages", []):
+    if not gdata:
         return
 
     guild = bot.get_guild(payload.guild_id)
-    member = payload.member or (guild.get_member(payload.user_id) if guild else None)
+    member = payload.member
+
+    # --- LOGIQUE STARBOARD ---
+    if str(payload.emoji) == "⭐":
+        channel = bot.get_channel(payload.channel_id)
+        msg = await channel.fetch_message(payload.message_id)
+        
+        # Supprimer l'auto-réaction (comme MEE6)
+        if payload.user_id == msg.author.id:
+            await msg.remove_reaction(payload.emoji, member)
+            return
+
+        # Vérifier si on atteint 5 étoiles et si le message n'a pas déjà été posté
+        star_reaction = discord.utils.get(msg.reactions, emoji="⭐")
+        if star_reaction and star_reaction.count >= 5:
+            if msg.id not in gdata.get("starboard_msgs", []):
+                starboard_channel = bot.get_channel(gdata.get("starboard_channel_id"))
+                if starboard_channel:
+                    embed = discord.Embed(description=msg.content, color=discord.Color.gold())
+                    embed.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
+                    embed.add_field(name="Source", value=f"[Aller au message]({msg.jump_url})")
+                    await starboard_channel.send(f"⭐ **5** | {msg.channel.mention}", embed=embed)
+                    
+                    # Marquer comme posté
+                    gdata.setdefault("starboard_msgs", []).append(msg.id)
+                    store.save()
+
     if member is None or member.bot:
         return
     key = str(payload.emoji)
@@ -732,8 +832,82 @@ async def rr_list(interaction: discord.Interaction):
     await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
 
-# ----------------------------------------------------------------------------- #
+@bot.tree.command(description="Envoie une copie du fichier de config (data.json) — modérateurs.")
+async def rr_backup(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_roles:
+        await interaction.response.send_message("Réservé aux modérateurs.", ephemeral=True)
+        return
+    if not os.path.exists(DATA_FILE):
+        await interaction.response.send_message("Aucun data.json pour l'instant.", ephemeral=True)
+        return
+    do_backup()  # profite de la demande pour créer aussi une copie locale
+    await interaction.response.send_message(
+        "Copie actuelle de la config \U0001F4E6 — garde-la précieusement !",
+        file=discord.File(DATA_FILE, filename=f"data-{time.strftime('%Y%m%d')}.json"),
+        ephemeral=True,
+    )
+
+
 if __name__ == "__main__":
     if not TOKEN:
         raise SystemExit("DISCORD_TOKEN manquant. Crée un fichier .env (voir .env.example).")
+    keep_alive()  # pour Replit, Glitch, etc.
     bot.run(TOKEN)
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    # Ignore les messages du bot
+    if message.author.bot:
+        return
+
+    gdata = store.guild(message.guild.id)
+    if gdata:
+        # 1. Création de fil automatique sur @everyone
+        if message.mention_everyone and message.channel.id in gdata.get("auto_thread_channels", []):
+            await message.create_thread(
+                name=f"Discussion - {message.author.display_name}", 
+                auto_archive_duration=1440 # 24 heures
+            )
+
+    # Indispensable si tu ajoutes des commandes basées sur un préfixe (en plus des slash commands)
+    await bot.process_commands(message)
+
+@bot.event
+async def on_message_delete(message: discord.Message):
+    if message.author.bot:
+        return
+    gdata = store.guild(message.guild.id)
+    if gdata and gdata.get("logs_channel_id"):
+        log_channel = bot.get_channel(gdata["logs_channel_id"])
+        embed = discord.Embed(title="Message supprimé", description=message.content, color=discord.Color.red())
+        embed.set_author(name=message.author.name)
+        embed.set_footer(text=f"Salon: {message.channel.name}")
+        await log_channel.send(embed=embed)
+
+from datetime import datetime
+
+@tasks.loop(hours=24)
+async def check_birthdays():
+    today = datetime.now().strftime("%d/%m")
+    for guild_id, gdata in store.data["guilds"].items():
+        if gdata.get("anniv_channel_id"):
+            channel = bot.get_channel(gdata["anniv_channel_id"])
+            if channel:
+                for user_id, date in gdata.get("birthdays", {}).items():
+                    if date == today:
+                        await channel.send(f"🎉 Joyeux anniversaire <@{user_id}> ! 🎂")
+
+@check_birthdays.before_loop
+async def _wait_ready_birthdays():
+    await bot.wait_until_ready()
+
+# N'oublie pas d'ajouter check_birthdays.start() dans la fonction on_ready()
+
+@bot.tree.command(description="Ajouter un anniversaire")
+async def anniv_add(interaction: discord.Interaction, utilisateur: discord.Member, date: str):
+    # Format attendu : JJ/MM
+    gdata = store.ensure_guild(interaction.guild_id)
+    gdata.setdefault("birthdays", {})[str(utilisateur.id)] = date
+    store.save()
+    await interaction.response.send_message(f"Anniversaire de {utilisateur.display_name} ajouté le {date}.", ephemeral=True)
