@@ -1,0 +1,154 @@
+{
+  "guilds": {
+    "1511707634791878838": {
+      "rr_channel_id": 1513540563113345105,
+      "mod_channel_id": 1513468309738225714,
+      "messages": [
+        1513540745653387304,
+        1513578508838899873
+      ],
+      "games": {
+        "Overwatch": {
+          "emoji": "🛡️",
+          "role_id": 1513540747281039450,
+          "message_id": 1513540745653387304
+        },
+        "Minecraft": {
+          "emoji": "⛏️",
+          "role_id": 1513540748346396672,
+          "message_id": 1513540745653387304
+        },
+        "Valorant": {
+          "emoji": "🔫",
+          "role_id": 1513540749197705329,
+          "message_id": 1513540745653387304
+        },
+        "League of Legends": {
+          "emoji": "⚔️",
+          "role_id": 1513540750296486081,
+          "message_id": 1513540745653387304
+        },
+        "Rocket League": {
+          "emoji": "🚗",
+          "role_id": 1513540752184053840,
+          "message_id": 1513540745653387304
+        },
+        "Echec": {
+          "emoji": "♟️",
+          "role_id": 1513540880307589220,
+          "message_id": 1513540745653387304
+        },
+        "Smash": {
+          "emoji": "🥊",
+          "role_id": 1513541654584365108,
+          "message_id": 1513540745653387304
+        },
+        "Marvel Rivals": {
+          "emoji": "🦸‍♂️",
+          "role_id": 1513541742048051371,
+          "message_id": 1513540745653387304
+        },
+        "No Man's Sky": {
+          "emoji": "🚀",
+          "role_id": 1513541804912279642,
+          "message_id": 1513540745653387304
+        },
+        "Marathon": {
+          "emoji": "🐛",
+          "role_id": 1513541843151880224,
+          "message_id": 1513540745653387304
+        },
+        "Monster Hunter": {
+          "emoji": "🧌",
+          "role_id": 1513542014375821372,
+          "message_id": 1513540745653387304
+        },
+        "Apex Legends": {
+          "emoji": "👊",
+          "role_id": 1513542246765428790,
+          "message_id": 1513540745653387304
+        },
+        "Street Fighter 6": {
+          "emoji": "🌇",
+          "role_id": 1513542576777592904,
+          "message_id": 1513540745653387304
+        },
+        "Hunt: Showdown": {
+          "emoji": "🤠",
+          "role_id": 1513542627553972385,
+          "message_id": 1513540745653387304
+        },
+        "Minecraft Dungeon": {
+          "emoji": "🏰",
+          "role_id": 1513542916122087535,
+          "message_id": 1513540745653387304
+        },
+        "Fortnite": {
+          "emoji": "🏗️",
+          "role_id": 1513543546345488475,
+          "message_id": 1513540745653387304
+        },
+        "Counter Strike": {
+          "emoji": "🪖",
+          "role_id": 1513545410205978645,
+          "message_id": 1513540745653387304
+        },
+        "Peak": {
+          "emoji": "⛰️",
+          "role_id": 1513547011897557062,
+          "message_id": 1513540745653387304
+        },
+        "Baldur's Gate 3": {
+          "emoji": "🧝",
+          "role_id": 1513555903125786784,
+          "message_id": 1513540745653387304
+        },
+        "Magic The Gathering (en physique ou en Tabletop Simulator)": {
+          "emoji": "🃏",
+          "role_id": 1513578507165503788,
+          "message_id": 1513578508838899873
+        },
+        "Project Zomboid": {
+          "emoji": "🧟‍♂️",
+          "role_id": 1513609706248343674,
+          "message_id": 1513578508838899873
+        },
+        "Slay The Spire 2": {
+          "emoji": "🗼",
+          "role_id": 1513610932951978084,
+          "message_id": 1513578508838899873
+        },
+        "Don't Starve Together": {
+          "emoji": "🐦‍⬛",
+          "role_id": 1513619501781090364,
+          "message_id": 1513578508838899873
+        },
+        "civilization 6": {
+          "emoji": "⏳",
+          "role_id": 1513651339287334924,
+          "message_id": 1513578508838899873
+        },
+        "Age Of Empire 2": {
+          "emoji": "🏯",
+          "role_id": 1513834800761536584,
+          "message_id": 1513578508838899873
+        },
+        "Sea of Thieves": {
+          "emoji": "🏴‍☠️",
+          "role_id": 1514193748794413138,
+          "message_id": 1513578508838899873
+        },
+        "Mecha Chameleon": {
+          "emoji": "🖌️",
+          "role_id": 1523698159627407591,
+          "message_id": 1513578508838899873
+        },
+        "Super Battle Golf": {
+          "emoji": "🏌️‍♂️",
+          "role_id": 1523698335632986184,
+          "message_id": 1513578508838899873
+        }
+      }
+    }
+  }
+}
